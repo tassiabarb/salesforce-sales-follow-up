@@ -1,58 +1,86 @@
-# Salesforce DX Project
+# 🚀 Salesforce Sales Follow-Up Automation & LWC Panel
 
-Salesforce DX is a development approach that brings source-driven development, team collaboration, and continuous integration to the Salesforce Platform. Instead of working directly in an org through a web browser, you work with metadata as source files in a local DX project, track changes in version control, and deploy through automated processes.
+Solução desenvolvida na plataforma Salesforce (Sales Cloud) para automatizar o acompanhamento (*follow-up*) de oportunidades comerciais abertas e fornecer aos vendedores uma interface dinâmica em **Lightning Web Components (LWC)** para visualização e conclusão rápida de tarefas.
 
-This project template gets you started with the tools and structure you need to build Salesforce applications using source control, scratch orgs, and the Salesforce CLI.
+---
 
-## Prerequisites
+## 🎯 Problema de Negócio
+Em equipes de vendas de alta performance, negociações ativas correm o risco de esfriar caso o vendedor não faça contato nos primeiros dias. 
+Esta automação garante que:
+1. Nenhuma oportunidade em aberto fique sem ação comercial pendente.
+2. Seja criada automaticamente uma **Tarefa de "Retomar oportunidade"** com vencimento para **3 dias**, atribuída ao responsável da oportunidade.
+3. Não sejam geradas tarefas duplicadas caso a oportunidade já possua um follow-up em andamento.
+4. O vendedor tenha um painel visual no topo da oportunidade para acompanhar o prazo e concluir a tarefa com **1 clique**.
 
-Before you start, make sure you have:
+---
 
-- **Salesforce CLI** - Download from [developer.salesforce.com/tools/salesforcecli](https://developer.salesforce.com/tools/salesforcecli). See [Install Salesforce CLI](https://developer.salesforce.com/docs/atlas.en-us.sfdx_setup.meta/sfdx_setup/sfdx_setup_install_cli.htm) for details.
-- **VS Code with Salesforce Extension Pack** - See [Installation Instructions](https://developer.salesforce.com/docs/platform/sfvscode-extensions/guide/install.html) for details. Includes the Agentforce Vibes extension.
-- **A development org** - Sign up for a free Developer Edition org [here](https://developer.salesforce.com/signup).
-- **Dev Hub enabled** (optional, required to create scratch orgs) - You can enable Dev Hub in your development org under Setup > Dev Hub.  See [Provide Developers Access to Salesforce DX Tools](https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/sfdx_setup_dx_tools.htm).
+## 🏗️ Arquitetura da Solução
 
-## Project Structure
+```mermaid
+flowchart LR
+    A[Oportunidade Criada/Editada] --> B[OpportunityFollowUpTrigger]
+    B --> C[OpportunityFollowUpService]
+    C -->|Filtra Oportunidades Abertas| D[Query SOQL Única]
+    D -->|Sem Tarefa Existente| E[Insert DML em Lote]
+    E --> F[(Salesforce Database)]
+    F -.->|@wire / Apex| G[LWC: opportunityFollowUpPanel]
+    G -->|Clique Concluir Tarefa| H[completetask DML]
+    H -.->|refreshApex| G
+```
 
-Your DX project follows this structure:
+---
 
-- **`force-app/main/default/`** - Your metadata source files live in this default package directory. You can configure additional package directories in the `sfdx-project.json` file.
-- **`config/`** - Scratch org definitions and project settings
-- **`scripts/`** - Automation scripts for common tasks
-- **`sfdx-project.json`** - Project manifest that defines package directories, namespace, API version, and other project-level settings
+## 📦 Componentes Desenvolvidos
 
-See [Salesforce DX Project Configuration](https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/sfdx_dev_ws_config.htm).
+### 1. Back-end (Apex)
+* **`OpportunityFollowUpTrigger.trigger`**:
+  * Acionado nos eventos `after insert` e `after update`.
+  * Encaminha o contexto (`Trigger.new`) diretamente para a camada de serviço.
+* **`OpportunityFollowUpService.cls`**:
+  * **`createFollowUps(List<Opportunity> oppList)`**: Método bulkificado que filtra oportunidades abertas, aplica *guard clause*, busca tarefas abertas via SOQL em lote e executa DML seguro.
+  * **`getOpenFollowUpTask(Id opportunityId)`**: Método `@AuraEnabled(cacheable=true)` para fornecer os dados reativos ao LWC.
+  * **`completetask(Id taskId)`**: Método `@AuraEnabled` que realiza a atualização do status da tarefa para `'Completed'`.
 
-## Get Started
+### 2. Front-end (Lightning Web Components)
+* **`opportunityFollowUpPanel`**:
+  * Exibido exclusivamente em páginas de registro de Oportunidades (`lightning__RecordPage`).
+  * Utiliza `@wire` reativo para monitorar tarefas abertas.
+  * Renderização condicional com `lwc:if` e `lwc:else`.
+  * Formatação de datas localizadas com `<lightning-formatted-date-time>` e status com `<lightning-badge>`.
+  * Ação imperativa de conclusão com `refreshApex` e notificações de sucesso via `ShowToastEvent`.
 
-Ready to start developing? The [Get Started with Salesforce DX](https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/sfdx_dev_get_started_dx.htm) guide walks you through your first project, from creating a scratch org to creating a simple Apex class or LWC to deploying your code to a sandbox.
+### 3. Qualidade & Testes Unitários
+* **`OpportunityFollowUpServiceTest.cls`**:
+  * ✅ **Cenário Positivo:** Validação de criação automática da tarefa no `insert`.
+  * ✅ **Cenário Negativo:** Garantia de que oportunidades `Closed Won` e `Closed Lost` não recebem tarefas.
+  * ✅ **Prevenção de Duplicatas:** Validação de que a atualização (`update`) de uma oportunidade não cria tarefas repetidas.
+  * ✅ **Integração LWC:** Testes unitários para os métodos `getOpenFollowUpTask` e `completetask`.
+  * ✅ **Bulk Test (200 Registros):** Comprovação de respeito total aos limites de transação do Salesforce (Governor Limits).
 
-## Common Salesforce CLI Commands
+---
 
-Here are common CLI commands that you'll use the most:
+## ⚡ Boas Práticas & Governor Limits Respeitados
 
-- `sf org login web`: Authorize an org
-- `sf org open`: Open your org in a browser
-- `sf org create scratch`: Create a scratch org
-- `sf project deploy start`: Deploy metadata to your org
-- `sf project retrieve start`: Retrieve metadata from your org
-- `sf template generate <artifact>`: Scaffold new components, such as Apex classes and triggers, LWC components, Lightning apps, and more
-- `sf apex <command>`: Run Apex tests, run anonymous Apex blocks, and view logs
-- `sf data <command>`: Work with test data
-- `sf alias <command>`: Manage org aliases
-- `sf config <command>`: Configure CLI settings
+* **100% Bulk-Safe:** Toda a lógica foi projetada para suportar de 1 a 200 registros simultâneos.
+* **Zero SOQL / DML em loops:** Todas as consultas e operações no banco de dados ocorrem de forma agregada fora de laços de repetição.
+* **Guard Clauses (Saídas Antecipadas):** Economia de chamadas SOQL e tempo de processador (CPU) quando não há registros elegíveis.
+* **Segurança & Compartilhamento:** Uso da cláusula `with sharing` para respeitar o modelo de segurança da organização.
 
-## Use Agentforce Vibes to Build Lightning Apps
+---
 
-Transform your ideas into custom Lightning apps that extend CRM workflows directly in Lightning Experience. Through natural conversations with Agentforce Vibes, implement custom objects and fields, complex business logic, and dynamic UI components. See [Build a Lightning App Using Agentforce Vibes](https://developer.salesforce.com/docs/platform/einstein-for-devs/guide/lexapp-overview.html).
+## 🚀 Como Executar o Projeto
 
-## Additional Resources
+### 1. Fazer o Deploy para a Org
+```bash
+sf project deploy start
+```
 
-- [Agentforce Vibes Developer Guide](https://developer.salesforce.com/docs/platform/einstein-for-devs/guide/einstein-overview.html)
-- [Salesforce CLI Installation Guide](https://developer.salesforce.com/docs/atlas.en-us.sfdx_setup.meta/sfdx_setup/sfdx_setup_intro.htm)
-- [Salesforce DX Developer Guide](https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/)
-- [Salesforce CLI Command Reference](https://developer.salesforce.com/docs/atlas.en-us.sfdx_cli_reference.meta/sfdx_cli_reference/)
-- [Salesforce CLI Plugin Development Guide](https://developer.salesforce.com/docs/platform/salesforce-cli-plugin/guide/conceptual-overview.html)
-- [Salesforce VS Code Extensions Documentation](https://developer.salesforce.com/tools/vscode/)
+### 2. Executar os Testes Unitários com Cobertura
+```bash
+sf apex run test --class-names OpportunityFollowUpServiceTest --result-format human --code-coverage
+```
 
+### 3. Adicionar o Componente na Página
+1. Abra qualquer Oportunidade no Salesforce.
+2. Clique no ícone de **Engrenagem ⚙️** > **Editar Página**.
+3. Arraste o componente **`opportunityFollowUpPanel`** para o layout e salve.
