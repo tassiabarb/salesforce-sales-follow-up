@@ -49,4 +49,28 @@ public with sharing class OpportunityFollowUpService {
             insert tasksToInsert;
         }
     }
+    @AuraEnabled(cacheable=true)
+
+    public static Task getOpenFollowUpTask(Id opportunityId) {
+        List<Task> tasks = [
+        SELECT Id, Subject, Status, ActivityDate, OwnerId, WhatId
+        FROM Task
+        WHERE WhatId = :opportunityId
+          AND Subject = 'Retomar oportunidade'
+          AND IsClosed = false
+        ORDER BY CreatedDate DESC
+        LIMIT 1
+    ];
+
+    return tasks.isEmpty() ? null : tasks[0];
+    }
+
+    @AuraEnabled
+    public static void completetask(Id taskId) {
+        Task taskToUpdate = new Task(
+        Id = taskId,
+        Status = 'Completed'
+);
+    update taskToUpdate;
+}
 }
