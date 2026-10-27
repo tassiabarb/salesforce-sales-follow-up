@@ -1,0 +1,34 @@
+<template>
+    <lightning-card title="Follow-up da oportunidade" icon-name="standard:opportunity">
+        <div class="slds-var-p-around_medium">
+
+            <template lwc:if={hasTask}>
+                <p>Assunto: {task.Subject}</p>
+                <p>
+                    <span class="slds-m-right_xx-small">Vencimento:</span>
+                    <lightning-formatted-date-time
+                        value={task.ActivityDate}
+                        year="numeric"
+                        month="2-digit"
+                        day="2-digit">
+                    </lightning-formatted-date-time>
+                </p>
+                <p>
+                    <span class="slds-m-right_xx-small">Status:</span>
+                    <lightning-badge label={task.Status}></lightning-badge>
+                </p>
+                <lightning-button
+                label="Concluir Tarefa"
+                variant="brand"
+                onclick={handleCompleteTask}
+                class="slds-m-top_small">
+                </lightning-button>
+            </template>
+
+            <template lwc:else>
+                <p>Nenhuma tarefa de follow-up pendente para esta oportunidade.</p>
+            </template>
+
+        </div>
+    </lightning-card>
+</template>
